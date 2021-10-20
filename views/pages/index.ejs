@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" integrity="sha512-+4zCK9k+qNFUR5X+cKL9EIR+ZOhtIloNl9GIKS57V1MyNsYpYcUrUeQc9vNfzsWfV28IaLL3i96P9sdNyeRssA==" crossorigin="anonymous" />
+    <title>Real-Time Tweet Stream</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.8.0/dist/tf.min.js"></script>
+    <!-- for database query -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js" integrity="sha512-aMGMvNYu8Ue4G+fHa359jcPb1u+ytAF+P2SCb+PxrjCdO3n3ZTxJ30zuH39rimUggmTwmh2u7wvQsDTHESnmfQ==" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="server/pred.js"></script>
+    <script type="text/javascript" src="server/preproc.js"></script>
+
+</head>
+
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a href="#" class="navbar-brand">Real-Time Tweet Stream</a>
+        </div>
+    </nav>
+
+
+
+
+    <div class="container">
+        <div id="tweetStream"></div>
+    </div>
+
+    <h1></h1>
+
+    <table class="table">
+        <thead>
+            <th>ID</th>
+            <th>User Handle</th>
+            <th>Tweet</th>
+            <th>Urgency Score</th>
+            <th>Geotagged Location</th>
+            <th>Tweet Link</th>
+        </thead>
+        <tbody>
+            <tr>
+                <% print.forEach(function (user) { %>
+                    <tr>
+                        <td><%= user.id %></td>
+                        <td><%= user.userhandle%></td>
+                        <td><%= user.tweet%></td>
+                        <td><%= user.uscore%></td>
+			            <td><%= user.geotag%></td>
+		                <td><%= user.url%></td>
+
+                    </tr>
+    
+                    <tr>
+                    	<td id="output_field2"></td>
+                		<td id="user_handle"></td>
+                		<td id="tweet_raw"></td>
+                		<td id="output_field"></td>
+                		<td id="geotag"></td>
+                		<td id="url"></td>
+                    </tr>
+            
+        
+                <% }) %>
+            </tr>
+
+        </tbody>
+    </table>
+
+<!--script> 
+    app.get("/", (req, res) => {
+        res.JSON({""})
+
+    })
+</script-->
+
+
+    <form id="serchKeyword" action="/set-keyword" method="POST"> 
+        <input type="text" id="keyword" placeholder="projectsagip2021" value="{{currentKeyword}}"/>
+        <input type="submit" value="Search">
+    </form>
+
+
+    <div class="container">
+        <div id="dbContent">
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        async function predictScore(procd_tweet) {
+            let vocab = await fetch('./server/vocab.json');
+            let score;
+            let sequence;
+            let uScore;
+            vocab = await vocab.json();
+            vocab = JSON.parse(vocab['config']['word_index']);
+            console.log(vocab);
+
+            try {
+                sequence = model.tokenize(procd_tweet, vocab);
+                score = await model.predict(sequence);
+                score = score.toString();
+                score = score.replace(/[\[\](Tensor)\n,]/g, "").trim();
+                document.getElementById('output_field').innerText = score;
+                uScore = document.getElementById('output_field').innerText;
+
+                //code for manipulating the uScore// 	
+                createCookie("score", score, "10");
+                console.log(score);
+
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', "server/write.php");
+                xhr.onload = function() {
+                    console.log(this.response);
+                }
+                xhr.open("GET", "server/write.php", true);
+                xhr.send();
+
+                console.log(uScore);
+                console.log(score);
+            } catch (e) {
+                document.getElementById('output_field2').innerText = e;
+                console.log(e);
+            }
+
+            return uScore;
+        }
+
+        function preprocess(tweet) {
+            let preprocd = remove_handle(tweet);
+            console.log(preprocd);
+            preprocd = remove_links(preprocd);
+            console.log(preprocd);
+            preprocd = remove_punc(preprocd);
+            console.log(preprocd);
+            preprocd = retain_alpha_hashtag(preprocd);
+            console.log(preprocd);
+            preprocd = remove_hashtags(preprocd);
+            console.log(preprocd);
+            preprocd = remove_extra_spaces(preprocd);
+            console.log(preprocd);
+            preprocd = preprocd.toLowerCase();
+            console.log(preprocd);
+            return preprocd;
+        }
+
+        function createCookie(name, value, days) {
+            var expires;
+
+            if (days) {
+                var date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toGMTString();
+            } else {
+                expires = "";
+            }
+            document.cookie = escape(name) + "=" + escape(value) + expires + "; path=/";
+        }
+    </script>
+        
+    <script>
+        const tweetStream = document.getElementById('tweetStream')
+        const socket = io()
+
+        const tweets = []
+
+        socket.on('connect', () => {
+            console.log('Connected to server...')
+        })
+
+        socket.on('tweet', (tweet) => {
+            // console.log(tweet)
+            const tweetData = {
+                id: tweet.data.id,
+                text: tweet.data.text,
+                username: `@${tweet.includes.users[0].username}`,
+                entities: tweet.data.entities.urls, 
+                geo: tweet.data.full_name 
+            }
+
+            let tweets = `${tweetData.text}`;
+            let handle = `${tweetData.username}`;
+            let tweet_link = `${tweetData.entities}`;
+            let geotag = `${tweetData.geo}`;
+
+            document.getElementById('tweet_raw').innerText = tweets;
+            document.getElementById('user_handle').innerText = handle;
+            document.getElementById('url').innerText = tweet_link;
+            document.getElementById('geotag').innerText = geotag;
+
+            /*createCookie("tweet", tweets, "10");
+            predictScore(preprocess(tweets));*/
+        })
+    </script>
+</body>
+
+</html>
