@@ -67,6 +67,10 @@ app.post('/set-keyword', function(req, res){
     let keyword = req.body.keyword;
     currentKeyword = keyword;
     //console.log(currentKeyword);
+    
+    // this will trigger a rerender
+    setRules(keyword);
+    
     res.render('/', {
         currentKeyword
     });
@@ -81,7 +85,8 @@ const streamURL =
     'https://api.twitter.com/2/tweets/search/stream?tweet.fields=public_metrics,entities,geo&expansions=author_id&place.fields=place_type'
 
 
-const rules = [{ value: currentKeyword }]
+// you can keep this a global if you need to
+let rules;
 
 // Get stream rules
 async function getRules() {
@@ -95,7 +100,11 @@ async function getRules() {
 }
 
 // Set stream rules
-async function setRules() {
+async function setRules(currentKeyword) {
+    
+    // set the keyword
+    rules = [{ value: currentKeyword }];
+    
     const data = {
         add: rules,
     }
@@ -106,7 +115,8 @@ async function setRules() {
             Authorization: `Bearer ${TOKEN}`,
         },
     })
-
+    
+    // do you need to return a promise here instead? so that you can wait for the response?
     return response.body
 }
 
@@ -166,7 +176,7 @@ io.on('connection', async() => {
         await deleteRules(currentRules)
 
         // Set rules based on array above
-        await setRules()
+        await setRules(currentKeyword) // this code is a bit controversial
     } catch (error) {
         console.error(error)
         process.exit(1)
